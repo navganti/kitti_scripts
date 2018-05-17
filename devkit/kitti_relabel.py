@@ -11,14 +11,8 @@ import time
 from PIL import Image
 from collections import namedtuple
 
-# DIR = ''
-# images = images in dir
-# for i in images:
-# Change label values
-#     for pixel in i:
-#         pixel.value = id_mapping[pixel.value] 
-
-IMAGES_DIR='../data_semantics/training/semantic/'
+IMAGES_DIR='../../../datasets/kitti/segmentation/training/semantic/'
+OUTPUT_DIR='../../../datasets/kitti_bayesian_segnet/trainannot/'
 
 #--------------------------------------------------------------------------------
 # Definitions
@@ -189,9 +183,14 @@ def relabel_image(image_path):
         # All the labels present in this image
         print(pixdict.keys())
         
-        print("Saving...")
         output.putdata(new_pixels)
-        output.save(image_path + ".newlabel.png", "PNG")
+        
+        path, image_name = os.path.split(image_path)
+        print(image_path, path, image_name)
+        output_file = OUTPUT_DIR + image_name
+        
+        print("Saving...", output_file)
+        output.save(output_file, "PNG")
 
     except:
         print("Couldn't process image: ", image_path)
