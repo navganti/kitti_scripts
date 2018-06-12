@@ -33,9 +33,13 @@
 
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
 
 namespace Eigen {
 using Vector6d = Matrix<double, 6, 1>;
+using Matrix4d = Matrix<double, 4, 4>;
 }
 
 /** Calculate the transformation expressing the pose of the ENU (locallevel)
@@ -128,12 +132,70 @@ int main(int argc, char **argv) {
 
     if (argc != 3) {
         std::cerr << std::endl
-                  << "Usage ./convert_moose_to_kitti path_to_original poses "
-                     "file path_to_extrinsic calibration"
+                  << "Usage ./convert_moose_to_kitti path_to_original_poses_file "
+                     "path_to_extrinsic calibration"
                   << std::endl;
 
         return 1;
     }
+
+    // Read in pose data from CSV
+    std::string poses_filename = argv[1];
+    std::string calib = argv[2];
+    std::cout << "Extracting poses from file: " << poses_filename << std::endl;
+    std::cout << "Calibration argument: " << calib << std::endl;
+
+    // TODO (Jonathan): Read file and extract values
+    std::vector<Eigen::Vector6d> measurements;
+
+    std::ifstream poses_file(poses_filename);
+    std::string line;
+    while (std::getline(poses_file, line)) {
+	std::istringstream iss(line);
+	double lat, lon, alt, rol, pit, yaw, ign;
+	if (!(iss >> ign >> lat >> lon >> alt >> ign >> ign >> ign >> rol >> pit >> yaw)) {
+	    std::cout << "Error reading line: " << line << std::endl;
+	    continue;
+	}
+
+	Eigen::Vector6d line_measurement;
+	line_measurement(0) = lat;
+	line_measurement(1) = lon;
+	line_measurement(2) = alt;
+	line_measurement(3) = rol;
+	line_measurement(4) = pit;
+	line_measurement(5) = yaw;
+	measurements.push_back(line_measurement);
+    }
+    
+    std::cout << "Read all measurements: " << measurements.size() << std::endl;
+    
+    // TODO (Jonathan): Get extrinsic calibration from yaml files in calibration publisher
+    // "go through the chain from GPS_IMU -> LIDAR -> FRONT_CAM -> LEFT_CAM"
+    // Retrieved from https://github.com/wavelab/calibration_publisher/blob/master/calibrations/moose/2017_10_01.yaml
+    Eigen::Matrix4d T_LIDAR_GPSIMU;
+    Eigen::Matrix3d T_LIDAR_FCAMERA;
+    Eigen::Matrix4d T_FLCAMERA_FCAMERA;
+
+    T_LIDAR_GPSIMU << 0.00198557728013, 0.999851298907, 0.0171300191978, -1.12584371634,
+        	     -0.999995766779, 0.00194884664695, 0.00216065276941, 0.0794562050592,
+	    	      0.00212694769751, -0.0171342368257, 0.999850935901, -1.31,
+	              0.0,0.0,0.0,1.0;
+
+    T_LIDAR_FCAMERA << 0.0442993181598,-0.0101754527732,0.998966481205,0.5415,
+        		-0.998979231642,0.00839248150057,0.0443853692301,-0.03,
+	    		-0.00883544894162,-0.999913009424,-0.00979328478481,-0.6202,
+	        	0.0,0.0,0.0,1.0;
+
+    T_FLCAMERA_FCAMERA <<  0.999332564621,-0.0199978793068,-0.0305697581316,0.51369,
+        		0.0204171747396,0.999700858999,0.0134659381941,0.0051933,
+	    		0.0302913232569,-0.0140810986441,0.999441923473,-0.00031466,
+	        	0.0,0.0,0.0,1.0;
+
+    // TODO: Eigen::Affine3d T_body_camera = 
+
+
+
 
     // The main steps are:
     // 1. Read in file data
@@ -149,12 +211,13 @@ int main(int argc, char **argv) {
     // T_earth_camera.
     // 6. Write out each transform to a new text file. Just the first 12 params.
 
-    size_t num_measurements;
+    size_t num_measurements = measurements.size();
     Eigen::Affine3d T_ref_earth;
     for (size_t i = 0; i < num_measurements; ++i) {
         Eigen::Vector6d inspvax_measurement;
 
         // Read measurement from file
+	inspvax_measurement = measurements[i];
 
         // Extract lla and rpy from the INSPVAX measurement.
         Eigen::Vector3d lla = inspvax_measurement.block<3, 1>(0, 0);
@@ -171,7 +234,7 @@ int main(int argc, char **argv) {
         // ...sorry for the inconsistent terminology.
         Eigen::Affine3d T_body_camera;
 
-        // Read T_body_camera from file.
+        // TODO (JONATHAN): Read T_body_camera from file.
 
         // Compose and calculate inverse.
         Eigen::Affine3d T_earth_camera = T_earth_body * T_body_camera;
