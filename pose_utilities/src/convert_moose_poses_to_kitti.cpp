@@ -37,6 +37,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <iomanip>
 
 namespace Eigen {
 using Vector6d = Matrix<double, 6, 1>;
@@ -103,9 +104,9 @@ Eigen::Affine3d convertLLAtoECEF(const Eigen::Vector3d &lla) {
 Eigen::Affine3d calculateTLocallevelBody(const Eigen::Vector3d &rpy) {
     Eigen::Affine3d T_locallevel_body = Eigen::Affine3d::Identity();
 
-    double roll = rpy(1);
-    double pitch = rpy(2);
-    double yaw = rpy(3);
+    double roll = rpy(0);
+    double pitch = rpy(1);
+    double yaw = rpy(2);
 
     double c_phi = std::cos(roll);
     double s_phi = std::sin(roll);
@@ -142,9 +143,7 @@ int main(int argc, char **argv) {
 
     // Read in pose data from CSV
     std::string poses_filename = argv[1];
-    std::string calib = argv[2];
     std::cout << "Extracting poses from file: " << poses_filename << std::endl;
-    std::cout << "Calibration argument: " << calib << std::endl;
 
     // TODO (Jonathan): Read file and extract values
     std::vector<Eigen::Vector6d> measurements;
@@ -155,7 +154,7 @@ int main(int argc, char **argv) {
         std::istringstream iss(line);
         double lat, lon, alt, rol, pit, yaw, ign;
         if (!(iss >> ign >> lat >> lon >> alt >> ign >> ign >> ign >> rol >>
-              pit >> yaw)) {
+              pit >> yaw >> ign >> ign >> ign)) {
             std::cout << "Error reading line: " << line << std::endl;
             continue;
         }
@@ -219,7 +218,9 @@ int main(int argc, char **argv) {
     Eigen::Affine3d T_ref_earth;
 
     // Open file
-    std::ofstream output_file("converted_poses.txt");
+    std::ofstream output_file;
+    output_file.open("converted_poses.txt", std::ofstream::out | std::ofstream::trunc);
+    output_file << std::fixed << std::setprecision(8);
 
     for (size_t i = 0; i < num_measurements; ++i) {
         Eigen::Vector6d inspvax_measurement;
@@ -238,11 +239,6 @@ int main(int argc, char **argv) {
         // Compose
         Eigen::Affine3d T_earth_body = T_earth_locallevel * T_locallevel_body;
 
-        // Extract camera transform T_gpsimu_camera.
-        // ...sorry for the inconsistent terminology.
-        Eigen::Affine3d T_body_camera;
-
-        // TODO (JONATHAN): Read T_body_camera from file.
 
         // Compose and calculate inverse.
         Eigen::Affine3d T_earth_camera = T_earth_body * T_body_camera;
@@ -255,16 +251,16 @@ int main(int argc, char **argv) {
 
         if (output_file.is_open()) {
             // Write T_ref_camera to file.
-            output_file << T_ref_camera(0, 0) << T_ref_camera(0, 1)
-                        << T_ref_camera(0, 2) << T_ref_camera(0, 3)
-                        << T_ref_camera(1, 0) << T_ref_camera(1, 1)
-                        << T_ref_camera(1, 2) << T_ref_camera(1, 3)
-                        << T_ref_camera(2, 0) << T_ref_camera(2, 1)
-                        << T_ref_camera(2, 2) << T_ref_camera(2, 3)
-                        << T_ref_camera(3, 0) << T_ref_camera(3, 1)
-                        << T_ref_camera(3, 2) << T_ref_camera(3, 3) << std::endl;
+            output_file << T_ref_camera(0, 0) << " " << T_ref_camera(0, 1) << " "
+                        << T_ref_camera(0, 2) << " " << T_ref_camera(0, 3) << " "
+                        << T_ref_camera(1, 0) << " " << T_ref_camera(1, 1) << " "
+                        << T_ref_camera(1, 2) << " " << T_ref_camera(1, 3) << " "
+                        << T_ref_camera(2, 0) << " " << T_ref_camera(2, 1) << " "
+                        << T_ref_camera(2, 2) << " " << T_ref_camera(2, 3) << std::endl;
         }
     }
+
+    output_file.close();
 
     return 0;
 }
