@@ -482,45 +482,38 @@ bool eval(string result_sha, const string &gt_file, const string &ref_file) {
   vector<errors> total_err;
 
   // for all sequences do
-  // file name
-  char file_name[256];
-  sprintf(file_name, "%02d.txt", i);
 
   // read ground truth and result poses
   vector<Matrix> poses_gt = loadPoses(gt_file);
   vector<Matrix> poses_result = loadPoses(ref_file);
 
   // plot status
-  std::cout << "Processing: %s, poses: " << file_name,
-      poses_result.size() << poses_gt.size() << std::endl;
+  std::cout << "Processing: " << ref_file << std::endl;
 
   // check for errors
   if (poses_gt.size() == 0 || poses_result.size() != poses_gt.size()) {
-       std::cout << "ERROR: Couldn't read (all) poses of: "  << file_name);
-       return false;
+    std::cout << "ERROR: Couldn't read (all) poses of: " << ref_file;
+    return false;
   }
 
   // compute sequence errors
   vector<errors> seq_err = calcSequenceErrors(poses_gt, poses_result);
-  saveSequenceErrors(seq_err, error_dir + "/" + file_name);
+  saveSequenceErrors(seq_err, error_dir + "/" + result_sha);
 
   // add to total errors
   total_err.insert(total_err.end(), seq_err.begin(), seq_err.end());
 
-  // for first half => plot trajectory and compute individual stats
-  if (i <= 15) {
+  // save + plot bird's eye view trajectories
+  savePathPlot(poses_gt, poses_result,
+               plot_path_dir + "/" + result_sha + ".txt");
+  vector<int32_t> roi = computeRoi(poses_gt, poses_result);
+  plotPathPlot(plot_path_dir, roi, std::stoi(result_sha));
 
-    // save + plot bird's eye view trajectories
-    savePathPlot(poses_gt, poses_result, plot_path_dir + "/" + file_name);
-    vector<int32_t> roi = computeRoi(poses_gt, poses_result);
-    plotPathPlot(plot_path_dir, roi, i);
-
-    // save + plot individual errors
-    char prefix[16];
-    sprintf(prefix, "%02d", i);
-    saveErrorPlots(seq_err, plot_error_dir, prefix);
-    plotErrorPlots(plot_error_dir, prefix);
-  }
+  // save + plot individual errors
+  char prefix[16];
+  sprintf(prefix, "%02d", std::stoi(result_sha));
+  saveErrorPlots(seq_err, plot_error_dir, prefix);
+  plotErrorPlots(plot_error_dir, prefix);
 
   // save + plot total errors + summary statistics
   if (total_err.size() > 0) {
@@ -549,7 +542,7 @@ int main(int32_t argc, char *argv[]) {
   string ref_file = argv[3];
 
   // run evaluation
-  bool success = eval(result_sha, mail);
+  bool success = eval(result_sha, gt_file, ref_file);
 
   return 0;
 }
