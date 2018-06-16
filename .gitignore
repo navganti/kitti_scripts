@@ -1,0 +1,17 @@
+CMakeLists.txt.user
+Examples/Stereo/stereo_kitti
+tests/test_bayesian_segnet
+CameraTrajectory.txt
+dependencies/DBoW2/build/
+dependencies/DBoW2/lib/
+dependencies/g2o/build/
+dependencies/g2o/lib/
+config/Vocabulary/ORBvoc.txt
+build/
+*~
+lib/
+cmake-build-debug/
+cmake-build-release/
+.idea
+*.caffemodel
+

@@ -480,7 +480,7 @@ bool eval (string result_sha) {
 	return true;
 }
 
-int32_t main (int32_t argc,char *argv[]) {
+int main (int32_t argc,char *argv[]) {
 
   // we need 4 arguments!
   if (argc!=4) {
@@ -493,19 +493,9 @@ int32_t main (int32_t argc,char *argv[]) {
   string gt_file = argv[2];
   string ref_file = argv[3];
 
-  // init notification mail
-  Mail *mail;
-  if (argc==4) mail = new Mail(argv[3]);
-  else         mail = new Mail();
-  mail->msg("Thank you for participating in our evaluation!");
-
   // run evaluation
-  bool success = eval(result_sha,mail);
-  if (argc==4) mail->finalize(success,"odometry",result_sha,argv[2]);
-  else         mail->finalize(success,"odometry",result_sha);
+  bool success = eval(result_sha ,mail);
 
-  // send mail and exit
-  delete mail;
   return 0;
 }
 
