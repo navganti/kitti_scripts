@@ -213,13 +213,11 @@ vector<int32_t> computeRoi(vector<Matrix> &poses_gt,
   return roi;
 }
 
-void plotPathPlot(string dir, vector<int32_t> &roi, int32_t idx) {
+void plotPathPlot(string dir, vector<int32_t> &roi, string test_name) {
 
   // gnuplot file name
   char command[1024];
-  char file_name[256];
-  sprintf(file_name, "%02d.gp", idx);
-  string full_name = dir + "/" + file_name;
+  string full_name = dir + "/" + test_name;
 
   // create png + eps
   for (int32_t i = 0; i < 2; i++) {
@@ -230,10 +228,10 @@ void plotPathPlot(string dir, vector<int32_t> &roi, int32_t idx) {
     // save gnuplot instructions
     if (i == 0) {
       fprintf(fp, "set term png size 900,900\n");
-      fprintf(fp, "set output \"%02d.png\"\n", idx);
+      fprintf(fp, "set output \"%s.png\"\n", test_name.c_str());
     } else {
       fprintf(fp, "set term postscript eps enhanced color\n");
-      fprintf(fp, "set output \"%02d.eps\"\n", idx);
+      fprintf(fp, "set output \"%s.eps\"\n", test_name.c_str());
     }
 
     fprintf(fp, "set size ratio -1\n");
@@ -241,47 +239,47 @@ void plotPathPlot(string dir, vector<int32_t> &roi, int32_t idx) {
     fprintf(fp, "set yrange [%d:%d]\n", roi[2], roi[3]);
     fprintf(fp, "set xlabel \"x [m]\"\n");
     fprintf(fp, "set ylabel \"z [m]\"\n");
-    fprintf(fp, "plot \"%02d.txt\" using 1:2 lc rgb \"#FF0000\" title 'Ground "
+    fprintf(fp, "plot \"%s.txt\" using 1:2 lc rgb \"#FF0000\" title 'Ground "
                 "Truth' w lines,",
-            idx);
-    fprintf(fp, "\"%02d.txt\" using 3:4 lc rgb \"#0000FF\" title 'Visual "
+            test_name.c_str());
+    fprintf(fp, "\"%s.txt\" using 3:4 lc rgb \"#0000FF\" title 'Visual "
                 "Odometry' w lines,",
-            idx);
-    fprintf(fp, "\"< head -1 %02d.txt\" using 1:2 lc rgb \"#000000\" pt 4 ps 1 "
+            test_name.c_str());
+    fprintf(fp, "\"< head -1 %s.txt\" using 1:2 lc rgb \"#000000\" pt 4 ps 1 "
                 "lw 2 title 'Sequence Start' w points\n",
-            idx);
+            test_name.c_str());
 
     // close file
     fclose(fp);
 
     // run gnuplot => create png + eps
-    sprintf(command, "cd %s; gnuplot %s", dir.c_str(), file_name);
+    sprintf(command, "cd %s; gnuplot %s", dir.c_str(), test_name.c_str());
     system(command);
   }
 
   // create pdf and crop
-  sprintf(command, "cd %s; ps2pdf %02d.eps %02d_large.pdf", dir.c_str(), idx,
-          idx);
+  sprintf(command, "cd %s; ps2pdf %s.eps %s_large.pdf", dir.c_str(), test_name.c_str(),
+          test_name.c_str());
   system(command);
-  sprintf(command, "cd %s; pdfcrop %02d_large.pdf %02d.pdf", dir.c_str(), idx,
-          idx);
+  sprintf(command, "cd %s; pdfcrop %s_large.pdf %s.pdf", dir.c_str(), test_name.c_str(),
+          test_name.c_str());
   system(command);
-  sprintf(command, "cd %s; rm %02d_large.pdf", dir.c_str(), idx);
+  sprintf(command, "cd %s; rm %s_large.pdf", dir.c_str(), test_name.c_str());
   system(command);
 }
 
 void saveErrorPlots(vector<errors> &seq_err, string plot_error_dir,
-                    char *prefix) {
+                    string test_name) {
 
   // file names
   char file_name_tl[1024];
-  sprintf(file_name_tl, "%s/%s_tl.txt", plot_error_dir.c_str(), prefix);
+  sprintf(file_name_tl, "%s/%s_tl.txt", plot_error_dir.c_str(), test_name.c_str());
   char file_name_rl[1024];
-  sprintf(file_name_rl, "%s/%s_rl.txt", plot_error_dir.c_str(), prefix);
+  sprintf(file_name_rl, "%s/%s_rl.txt", plot_error_dir.c_str(), test_name.c_str());
   char file_name_ts[1024];
-  sprintf(file_name_ts, "%s/%s_ts.txt", plot_error_dir.c_str(), prefix);
+  sprintf(file_name_ts, "%s/%s_ts.txt", plot_error_dir.c_str(), test_name.c_str());
   char file_name_rs[1024];
-  sprintf(file_name_rs, "%s/%s_rs.txt", plot_error_dir.c_str(), prefix);
+  sprintf(file_name_rs, "%s/%s_rs.txt", plot_error_dir.c_str(), test_name.c_str());
 
   // open files
   FILE *fp_tl = fopen(file_name_tl, "w");
@@ -344,7 +342,7 @@ void saveErrorPlots(vector<errors> &seq_err, string plot_error_dir,
   fclose(fp_rs);
 }
 
-void plotErrorPlots(string dir, char *prefix) {
+void plotErrorPlots(string dir, string test_name) {
 
   char command[1024];
 
@@ -371,7 +369,7 @@ void plotErrorPlots(string dir, char *prefix) {
     // gnuplot file name
     char file_name[1024];
     char full_name[1024];
-    sprintf(file_name, "%s_%s.gp", prefix, suffix);
+    sprintf(file_name, "%s_%s.gp", test_name.c_str(), suffix);
     sprintf(full_name, "%s/%s", dir.c_str(), file_name);
 
     // create png + eps
@@ -383,10 +381,10 @@ void plotErrorPlots(string dir, char *prefix) {
       // save gnuplot instructions
       if (j == 0) {
         fprintf(fp, "set term png size 500,250 font \"Helvetica\" 11\n");
-        fprintf(fp, "set output \"%s_%s.png\"\n", prefix, suffix);
+        fprintf(fp, "set output \"%s_%s.png\"\n", test_name.c_str(), suffix);
       } else {
         fprintf(fp, "set term postscript eps enhanced color\n");
-        fprintf(fp, "set output \"%s_%s.eps\"\n", prefix, suffix);
+        fprintf(fp, "set output \"%s_%s.eps\"\n", test_name.c_str(), suffix);
       }
 
       // start plot at 0
@@ -406,7 +404,7 @@ void plotErrorPlots(string dir, char *prefix) {
         fprintf(fp, "set ylabel \"Rotation Error [deg/m]\"\n");
 
       // plot error curve
-      fprintf(fp, "plot \"%s_%s.txt\" using ", prefix, suffix);
+      fprintf(fp, "plot \"%s_%s.txt\" using ", test_name.c_str(), suffix);
       switch (i) {
       case 0:
         fprintf(fp, "1:($2*100) title 'Translation Error'");
@@ -433,12 +431,12 @@ void plotErrorPlots(string dir, char *prefix) {
 
     // create pdf and crop
     sprintf(command, "cd %s; ps2pdf %s_%s.eps %s_%s_large.pdf", dir.c_str(),
-            prefix, suffix, prefix, suffix);
+            test_name.c_str(), suffix, test_name.c_str(), suffix);
     system(command);
     sprintf(command, "cd %s; pdfcrop %s_%s_large.pdf %s_%s.pdf", dir.c_str(),
-            prefix, suffix, prefix, suffix);
+            test_name.c_str(), suffix, test_name.c_str(), suffix);
     system(command);
-    sprintf(command, "cd %s; rm %s_%s_large.pdf", dir.c_str(), prefix, suffix);
+    sprintf(command, "cd %s; rm %s_%s_large.pdf", dir.c_str(), test_name.c_str(), suffix);
     system(command);
   }
 }
@@ -465,23 +463,21 @@ void saveStats(vector<errors> err, string dir) {
   fclose(fp);
 }
 
-bool eval(string result_sha, const string &gt_file, const string &ref_file) {
+bool eval(string result_sha, const string &gt_file, const string &ref_file, const string &test_name) {
 
   // ground truth and result directories
-  string result_dir = "results/" + result_sha;
+  string result_dir = result_sha + "/" + test_name + "/results";
   string error_dir = result_dir + "/errors";
   string plot_path_dir = result_dir + "/plot_path";
   string plot_error_dir = result_dir + "/plot_error";
 
   // create output directories
-  system(("mkdir " + error_dir).c_str());
-  system(("mkdir " + plot_path_dir).c_str());
-  system(("mkdir " + plot_error_dir).c_str());
+  system(("mkdir -p " + error_dir).c_str());
+  system(("mkdir -p " + plot_path_dir).c_str());
+  system(("mkdir -p " + plot_error_dir).c_str());
 
   // total errors
   vector<errors> total_err;
-
-  // for all sequences do
 
   // read ground truth and result poses
   vector<Matrix> poses_gt = loadPoses(gt_file);
@@ -492,33 +488,32 @@ bool eval(string result_sha, const string &gt_file, const string &ref_file) {
 
   // check for errors
   if (poses_gt.size() == 0 || poses_result.size() != poses_gt.size()) {
-    std::cout << "ERROR: Couldn't read (all) poses of: " << ref_file;
+    std::cerr << "ERROR: Couldn't read poses of: " << ref_file << std::endl;
+    std::cerr << "Ground truth size: " << poses_gt.size() << std::endl;
+    std::cerr << "Results size: " << poses_result.size() << std::endl;
     return false;
   }
 
   // compute sequence errors
   vector<errors> seq_err = calcSequenceErrors(poses_gt, poses_result);
-  saveSequenceErrors(seq_err, error_dir + "/" + result_sha);
+  saveSequenceErrors(seq_err, error_dir + "/" + test_name + ".txt");
 
   // add to total errors
   total_err.insert(total_err.end(), seq_err.begin(), seq_err.end());
 
   // save + plot bird's eye view trajectories
   savePathPlot(poses_gt, poses_result,
-               plot_path_dir + "/" + result_sha + ".txt");
+               plot_path_dir + "/" + test_name + ".txt");
   vector<int32_t> roi = computeRoi(poses_gt, poses_result);
-  plotPathPlot(plot_path_dir, roi, std::stoi(result_sha));
+  plotPathPlot(plot_path_dir, roi, test_name);
 
   // save + plot individual errors
-  char prefix[16];
-  sprintf(prefix, "%02d", std::stoi(result_sha));
-  saveErrorPlots(seq_err, plot_error_dir, prefix);
-  plotErrorPlots(plot_error_dir, prefix);
+  saveErrorPlots(seq_err, plot_error_dir, test_name);
+  plotErrorPlots(plot_error_dir, test_name);
 
   // save + plot total errors + summary statistics
   if (total_err.size() > 0) {
-    char prefix[16];
-    sprintf(prefix, "avg");
+    string prefix = test_name + "_" + "avg";
     saveErrorPlots(total_err, plot_error_dir, prefix);
     plotErrorPlots(plot_error_dir, prefix);
     saveStats(total_err, result_dir);
@@ -530,9 +525,9 @@ bool eval(string result_sha, const string &gt_file, const string &ref_file) {
 
 int main(int32_t argc, char *argv[]) {
 
-  // we need 4 arguments!
-  if (argc != 4) {
-    cout << "Usage: ./eval_odometry result_sha gt_file ref_file" << endl;
+  // we need 5 arguments!
+  if (argc != 5) {
+    cerr << "Usage: ./eval_odometry result_sha gt_file ref_file test_name" << endl;
     return 1;
   }
 
@@ -540,9 +535,10 @@ int main(int32_t argc, char *argv[]) {
   string result_sha = argv[1];
   string gt_file = argv[2];
   string ref_file = argv[3];
+  string test_name = argv[4];
 
   // run evaluation
-  bool success = eval(result_sha, gt_file, ref_file);
+  bool success = eval(result_sha, gt_file, ref_file, test_name);
 
   return 0;
 }
