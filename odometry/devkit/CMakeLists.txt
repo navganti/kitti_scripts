@@ -13,7 +13,7 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 include_directories(include)
 
-add_library(${PROJECT_NAME}_libs
+add_library(matrix
     src/matrix.cpp
 )
 
@@ -22,5 +22,5 @@ add_executable(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME}
-    ${PROJECT_NAME}_libs
+    matrix
 )
