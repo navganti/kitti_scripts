@@ -2,20 +2,23 @@
 #include <limits>
 #include <cmath>
 #include <vector>
+#include <dirent.h>
+#include <algorithm>
+#include <sstream>
 
-#include "matrix.h"
+#include "matrix.hpp"
 
 const float lengths[] = {100, 200, 300, 400, 500, 600, 700, 800};
 int32_t num_lengths = 8;
 
-struct errors {
+struct Errors {
     int32_t first_frame;
     float r_err;
     float t_err;
     float len;
     float speed;
 
-    errors(
+    Errors(
       int32_t first_frame, float r_err, float t_err, float len, float speed)
         : first_frame(first_frame),
           r_err(r_err),
@@ -24,7 +27,7 @@ struct errors {
           speed(speed) {}
 };
 
-std::vector<Matrix> loadPoses(const std::string file_name) {
+std::vector<Matrix> loadPoses(const std::string &file_name) {
     std::vector<Matrix> poses;
     FILE *fp = fopen(file_name.c_str(), "r");
 
@@ -103,10 +106,11 @@ inline float translationError(Matrix &pose_error) {
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-std::vector<errors> calcSequenceErrors(std::vector<Matrix> &poses_gt,
-                                       std::vector<Matrix> &poses_result) {
+std::vector<Errors> calcSequenceErrors(
+  const std::vector<Matrix> &poses_gt,
+  const std::vector<Matrix> &poses_result) {
     // error vector
-    std::vector<errors> err;
+    std::vector<Errors> err;
 
     // parameters
     int32_t step_size = 10;  // every second
@@ -145,7 +149,7 @@ std::vector<errors> calcSequenceErrors(std::vector<Matrix> &poses_gt,
 
             // write to file
             err.emplace_back(
-              errors(first_frame, r_err / len, t_err / len, len, speed));
+              Errors(first_frame, r_err / len, t_err / len, len, speed));
         }
     }
 
@@ -153,7 +157,7 @@ std::vector<errors> calcSequenceErrors(std::vector<Matrix> &poses_gt,
     return err;
 }
 
-void saveSequenceErrors(std::vector<errors> &err, std::string file_name) {
+void saveSequenceErrors(std::vector<Errors> &err, std::string file_name) {
     // open file
     FILE *fp;
     fp = fopen(file_name.c_str(), "w");
@@ -172,9 +176,7 @@ void saveSequenceErrors(std::vector<errors> &err, std::string file_name) {
     fclose(fp);
 }
 
-void savePathPlot(std::vector<Matrix> &poses_gt,
-                  std::vector<Matrix> &poses_result,
-                  std::string file_name) {
+void savePlot(const std::vector<Matrix> &poses, const std::string &file_name) {
     // parameters
     int32_t step_size = 3;
 
@@ -182,21 +184,16 @@ void savePathPlot(std::vector<Matrix> &poses_gt,
     FILE *fp = fopen(file_name.c_str(), "w");
 
     // save x/z coordinates of all frames to file
-    for (int32_t i = 0; i < poses_gt.size(); i += step_size) {
-        fprintf(fp,
-                "%f %f %f %f\n",
-                poses_gt[i].val[0][3],
-                poses_gt[i].val[2][3],
-                poses_result[i].val[0][3],
-                poses_result[i].val[2][3]);
+    for (int32_t i = 0; i < poses.size(); i += step_size) {
+        fprintf(fp, "%f %f\n", poses[i].val[0][3], poses[i].val[2][3]);
     }
 
     // close file
     fclose(fp);
 }
 
-std::vector<int32_t> computeRoi(std::vector<Matrix> &poses_gt,
-                                std::vector<Matrix> &poses_result) {
+std::vector<int32_t> computeRoi(const std::vector<Matrix> &poses_gt,
+                                const std::vector<Matrix> &poses_result) {
     float x_min = std::numeric_limits<int32_t>::max();
     float x_max = std::numeric_limits<int32_t>::min();
     float z_min = std::numeric_limits<int32_t>::max();
@@ -260,12 +257,23 @@ std::vector<int32_t> computeRoi(std::vector<Matrix> &poses_gt,
     return roi;
 }
 
-void plotPathPlot(std::string dir,
+void plotPathPlot(const std::string &dir,
                   std::vector<int32_t> &roi,
-                  std::string test_name) {
+                  const std::vector<std::string> &directories,
+                  const std::string &trajectory_num) {
     // gnuplot file name
     char command[1024];
-    std::string full_name = dir + "/" + test_name;
+    std::string full_name = dir + "/" + trajectory_num;
+
+    // Colourscheme selected from
+    // http://colorbrewer2.org/#type=qualitative&scheme=Set1&n=8
+    std::vector<std::string> colours{"#377EB8",
+                                     "#4DAF4A",
+                                     "#984EA3",
+                                     "#FF7F00",
+                                     "#FFFF33",
+                                     "#A65628",
+                                     "#F781BF"};
 
     // create png + eps
     for (int32_t i = 0; i < 2; i++) {
@@ -275,35 +283,50 @@ void plotPathPlot(std::string dir,
         // save gnuplot instructions
         if (i == 0) {
             fprintf(fp, "set term png size 900,900\n");
-            fprintf(fp, "set output \"%s.png\"\n", test_name.c_str());
+            fprintf(fp, "set output \"%s.png\"\n", trajectory_num.c_str());
         } else {
             fprintf(fp, "set term postscript eps enhanced color\n");
-            fprintf(fp, "set output \"%s.eps\"\n", test_name.c_str());
+            fprintf(fp, "set output \"%s.eps\"\n", trajectory_num.c_str());
         }
 
         fprintf(fp, "set size ratio -1\n");
-        fprintf(fp, "set xrange [%d:%d]\n", roi[0], roi[1]);
+
+        int32_t xmax = roi[1] + 175;
+
+        if (trajectory_num == "07") {
+            xmax = roi[1];
+        }
+
+        fprintf(fp, "set xrange [%d:%d]\n", roi[0], xmax);
         fprintf(fp, "set yrange [%d:%d]\n", roi[2], roi[3]);
         fprintf(fp, "set xlabel \"x [m]\"\n");
         fprintf(fp, "set ylabel \"z [m]\"\n");
         fprintf(fp,
                 "plot \"%s.txt\" using 1:2 lc rgb \"#FF0000\" title 'Ground "
                 "Truth' w lines,",
-                test_name.c_str());
-        fprintf(fp,
-                "\"%s.txt\" using 3:4 lc rgb \"#0000FF\" title 'Visual "
-                "Odometry' w lines,",
-                test_name.c_str());
+                trajectory_num.c_str());
+
+        for (size_t i = 0; i < directories.size(); ++i) {
+            std::string test_name = directories.at(i) + "_" + trajectory_num;
+
+            fprintf(fp,
+                    "\"%s.txt\" using 1:2 lc rgb \"%s\" title '%s' w lines,",
+                    test_name.c_str(),
+                    colours.at(i).c_str(),
+                    directories.at(i).c_str());
+        }
+
         fprintf(fp,
                 "\"< head -1 %s.txt\" using 1:2 lc rgb \"#000000\" pt 4 ps 1 "
                 "lw 2 title 'Sequence Start' w points\n",
-                test_name.c_str());
+                trajectory_num.c_str());
 
         // close file
         fclose(fp);
 
         // run gnuplot => create png + eps
-        sprintf(command, "cd %s; gnuplot %s", dir.c_str(), test_name.c_str());
+        sprintf(
+          command, "cd %s; gnuplot %s", dir.c_str(), trajectory_num.c_str());
         system(command);
     }
 
@@ -311,24 +334,25 @@ void plotPathPlot(std::string dir,
     sprintf(command,
             "cd %s; ps2pdf %s.eps %s_large.pdf",
             dir.c_str(),
-            test_name.c_str(),
-            test_name.c_str());
+            trajectory_num.c_str(),
+            trajectory_num.c_str());
     system(command);
 
     sprintf(command,
             "cd %s; pdfcrop %s_large.pdf %s.pdf",
             dir.c_str(),
-            test_name.c_str(),
-            test_name.c_str());
+            trajectory_num.c_str(),
+            trajectory_num.c_str());
     system(command);
 
-    sprintf(command, "cd %s; rm %s_large.pdf", dir.c_str(), test_name.c_str());
+    sprintf(
+      command, "cd %s; rm %s_large.pdf", dir.c_str(), trajectory_num.c_str());
     system(command);
 }
 
-void saveErrorPlots(std::vector<errors> &seq_err,
-                    std::string plot_error_dir,
-                    std::string test_name) {
+void saveErrorPlots(const std::vector<Errors> &seq_err,
+                    const std::string &plot_error_dir,
+                    const std::string &test_name) {
     // file names
     char file_name_tl[1024];
     sprintf(
@@ -403,7 +427,7 @@ void saveErrorPlots(std::vector<errors> &seq_err,
     fclose(fp_rs);
 }
 
-void plotErrorPlots(std::string dir, std::string test_name) {
+void plotErrorPlots(const std::string &dir, const std::string &test_name) {
     char command[1024];
 
     // for all four error plots do
@@ -512,33 +536,48 @@ void plotErrorPlots(std::string dir, std::string test_name) {
     }
 }
 
-void saveStats(std::vector<errors> err, std::string dir) {
-    float t_err = 0;
-    float r_err = 0;
+std::vector<int32_t> calculateMaxROI(
+  const std::vector<std::vector<int32_t>> &all_rois) {
+    // Out of all the ROIs, need to figure out which one has the:
+    // min x, max x, min y, max y.
+    int32_t min_x, max_x, min_y, max_y;
 
-    // for all errors do => compute sum of t_err, r_err
-    for (auto it = err.begin(); it != err.end(); it++) {
-        t_err += it->t_err;
-        r_err += it->r_err;
+    // Initialize values.
+    min_x = all_rois.at(0).at(0);
+    max_x = all_rois.at(0).at(1);
+    min_y = all_rois.at(0).at(2);
+    max_y = all_rois.at(0).at(3);
+
+    // Go through all values, and find the maximum and minimum of each element
+    for (size_t i = 1; i < all_rois.size(); ++i) {
+        if (all_rois.at(i).at(0) < min_x) {
+            min_x = all_rois.at(i).at(0);
+        }
+
+        if (all_rois.at(i).at(1) > max_x) {
+            max_x = all_rois.at(i).at(1);
+        }
+
+        if (all_rois.at(i).at(2) < min_y) {
+            min_y = all_rois.at(i).at(2);
+        }
+
+        if (all_rois.at(i).at(3) > max_y) {
+            max_y = all_rois.at(i).at(3);
+        }
     }
 
-    // open file
-    FILE *fp = fopen((dir + "/stats.txt").c_str(), "w");
+    std::vector<int32_t> max_roi{min_x, max_x, min_y, max_y};
 
-    // save errors
-    float num = err.size();
-    fprintf(fp, "%f %f\n", t_err / num, r_err / num);
-
-    // close file
-    fclose(fp);
+    return max_roi;
 }
 
-bool eval(std::string result_sha,
+bool eval(std::string trajectory_num,
           const std::string &gt_file,
-          const std::string &ref_file,
-          const std::string &test_name) {
+          const std::vector<std::string> &test_files,
+          const std::vector<std::string> &directories) {
     // ground truth and result directories
-    std::string result_dir = result_sha + "/" + test_name + "/results";
+    std::string result_dir = trajectory_num + "/results";
     std::string error_dir = result_dir + "/errors";
     std::string plot_path_dir = result_dir + "/plot_path";
     std::string plot_error_dir = result_dir + "/plot_error";
@@ -549,69 +588,150 @@ bool eval(std::string result_sha,
     system(("mkdir -p " + plot_error_dir).c_str());
 
     // total errors
-    std::vector<errors> total_err;
+    std::vector<std::vector<Errors>> all_errors;
+    std::vector<std::vector<int32_t>> all_rois;
 
-    // read ground truth and result poses
+    // read ground truth and save to file
     std::vector<Matrix> poses_gt = loadPoses(gt_file);
-    std::vector<Matrix> poses_result = loadPoses(ref_file);
+    savePlot(poses_gt, plot_path_dir + "/" + trajectory_num + ".txt");
 
-    // plot status
-    std::cout << "Processing: " << ref_file << std::endl;
+    // Read all tests
+    std::vector<std::vector<Matrix>> poses_tests;
+    for (const auto &test : test_files) {
+        std::vector<Matrix> test_result = loadPoses(test);
 
-    // check for errors
-    if (poses_gt.size() == 0 || poses_result.size() != poses_gt.size()) {
-        std::cerr << "ERROR: Couldn't read poses of: " << ref_file << std::endl;
-        std::cerr << "Ground truth size: " << poses_gt.size() << std::endl;
-        std::cerr << "Results size: " << poses_result.size() << std::endl;
-        return false;
+        poses_tests.emplace_back(test_result);
     }
 
-    // compute sequence errors
-    std::vector<errors> seq_err = calcSequenceErrors(poses_gt, poses_result);
-    saveSequenceErrors(seq_err, error_dir + "/" + test_name + ".txt");
+    // Process each of the tests
+    int count = 0;
+    for (const auto &test : poses_tests) {
+        std::string test_file = directories.at(static_cast<size_t>(count));
+        std::string test_name = test_file + "_" + trajectory_num;
+        // Print status
+        std::cout << "Processing: " << test_file << std::endl;
 
-    // add to total errors
-    total_err.insert(total_err.end(), seq_err.begin(), seq_err.end());
+        // check for errors
+        if (poses_gt.size() == 0 || test.size() != poses_gt.size()) {
+            std::cerr << "ERROR: Couldn't read poses of: " << test_file
+                      << std::endl;
+            std::cerr << "Ground truth size: " << poses_gt.size() << std::endl;
+            std::cerr << "Results size: " << test.size() << std::endl;
+            return false;
+        }
 
-    // save + plot bird's eye view trajectories
-    savePathPlot(
-      poses_gt, poses_result, plot_path_dir + "/" + test_name + ".txt");
-    std::vector<int32_t> roi = computeRoi(poses_gt, poses_result);
-    plotPathPlot(plot_path_dir, roi, test_name);
+        // Compute and save sequence errors.
+        std::vector<Errors> seq_err = calcSequenceErrors(poses_gt, test);
+        std::ostringstream error_path;
+        error_path << error_dir << "/" << test_name << ".txt";
+        saveSequenceErrors(seq_err, error_path.str());
 
-    // save + plot individual errors
-    saveErrorPlots(seq_err, plot_error_dir, test_name);
-    plotErrorPlots(plot_error_dir, test_name);
+        // add to total errors
+        std::vector<Errors> test_error;
+        test_error.insert(test_error.end(), seq_err.begin(), seq_err.end());
+        all_errors.emplace_back(test_error);
 
-    // save + plot total errors + summary statistics
-    if (total_err.size() > 0) {
-        std::string prefix = test_name + "_" + "avg";
-        saveErrorPlots(total_err, plot_error_dir, prefix);
-        plotErrorPlots(plot_error_dir, prefix);
-        saveStats(total_err, result_dir);
+        // Save path plots for each file.
+        std::ostringstream path_plot;
+        path_plot << plot_path_dir << "/" << test_name << ".txt";
+        savePlot(test, path_plot.str());
+
+        // Compute ROI for each test
+        std::vector<int32_t> roi = computeRoi(poses_gt, test);
+        all_rois.emplace_back(roi);
+
+        // Save individual error plot text.
+        saveErrorPlots(seq_err, plot_error_dir, test_name);
+
+        ++count;
     }
+
+    std::vector<int32_t> max_roi = calculateMaxROI(all_rois);
+
+    // Plot all paths and errors
+    plotPathPlot(plot_path_dir, max_roi, directories, trajectory_num);
+
+    // // save + plot individual errors
+    // plotErrorPlots(plot_error_dir, trajectory_num);
 
     // success
     return true;
 }
 
+// Directory parsing examples from
+// https://stackoverflow.com/questions/5043403/listing-only-folders-in-directory
+// https://stackoverflow.com/questions/612097/how-can-i-get-the-list-of-files-in-a-directory-using-c-or-c
+std::vector<std::string> getAllDirectories(const std::string &trajectory_num) {
+    std::vector<std::string> directories;
+
+    const char *PATH = trajectory_num.c_str();
+    DIR *dir = opendir(PATH);
+
+    struct dirent *entry = readdir(dir);
+
+    while (entry != nullptr) {
+        if (entry->d_type == DT_DIR && std::string{entry->d_name} != "." &&
+            std::string{entry->d_name} != ".." &&
+            std::string{entry->d_name} != "results") {
+            directories.emplace_back(std::string{entry->d_name});
+        }
+
+        entry = readdir(dir);
+    }
+
+    // Sort directories alphabetically.
+    std::sort(directories.begin(), directories.end());
+
+    return directories;
+}
+
+std::vector<std::string> generateTestNames(
+  const std::vector<std::string> &directories,
+  const std::string &trajectory_num) {
+    std::vector<std::string> test_files;
+
+    for (const auto &dir : directories) {
+        std::ostringstream test;
+        test << trajectory_num << "/" << dir << "/" << dir << "_"
+             << trajectory_num << ".txt";
+
+        test_files.emplace_back(test.str());
+    }
+
+    return test_files;
+}
+
 int main(int32_t argc, char *argv[]) {
-    // we need 5 arguments!
-    if (argc != 5) {
-        std::cerr
-          << "Usage: ./eval_odometry result_sha gt_file ref_file test_name"
-          << std::endl;
+    // We only need the trajectory number as an argument!
+    if (argc != 2) {
+        std::cerr << "Usage: ./eval_odometry trajectory_num" << std::endl;
         return 1;
     }
 
     // read arguments
-    std::string result_sha = argv[1];
-    std::string gt_file = argv[2];
-    std::string ref_file = argv[3];
-    std::string test_name = argv[4];
+    std::string trajectory_num = argv[1];
+    std::string gt_file = trajectory_num + "/" + trajectory_num + ".txt";
 
+    // Get all directories
+    std::vector<std::string> directories =
+      getAllDirectories(trajectory_num + "/");
+
+    // Create all test files
+    std::vector<std::string> test_files =
+      generateTestNames(directories, trajectory_num);
+
+    bool success = false;
     // run evaluation
-    bool success = eval(result_sha, gt_file, ref_file, test_name);
+    if (!test_files.empty()) {
+        success = eval(trajectory_num, gt_file, test_files, directories);
+    }
+
+    if (success) {
+        std::cout << "Trajectories generated successfully!" << std::endl;
+    } else {
+        std::cerr << "ERROR: Trajectories not generated successfully!"
+                  << std::endl;
+    }
 
     return 0;
 }
