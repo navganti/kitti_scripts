@@ -427,8 +427,21 @@ void saveErrorPlots(const std::vector<Errors> &seq_err,
     fclose(fp_rs);
 }
 
-void plotErrorPlots(const std::string &dir, const std::string &test_name) {
+void plotErrorPlots(const std::string &dir,
+                    const std::vector<std::string> &directories,
+                    const std::string &trajectory_num) {
     char command[1024];
+
+    // Colourscheme selected from
+    // http://colorbrewer2.org/#type=qualitative&scheme=Set1&n=8
+    std::vector<std::string> colours{"#377EB8",
+                                     "#4DAF4A",
+                                     "#984EA3",
+                                     "#FF7F00",
+                                     "#FFFF33",
+                                     "#A65628",
+                                     "#F781BF"};
+
 
     // for all four error plots do
     for (int32_t i = 0; i < 4; i++) {
@@ -445,7 +458,7 @@ void plotErrorPlots(const std::string &dir, const std::string &test_name) {
         // gnuplot file name
         char file_name[1024];
         char full_name[1024];
-        sprintf(file_name, "%s_%s.gp", test_name.c_str(), suffix);
+        sprintf(file_name, "%s_%s.gp", trajectory_num.c_str(), suffix);
         sprintf(full_name, "%s/%s", dir.c_str(), file_name);
 
         // create png + eps
@@ -457,12 +470,16 @@ void plotErrorPlots(const std::string &dir, const std::string &test_name) {
             if (j == 0) {
                 fprintf(fp,
                         "set term png size 500,250 font \"Helvetica\" 11\n");
-                fprintf(
-                  fp, "set output \"%s_%s.png\"\n", test_name.c_str(), suffix);
+                fprintf(fp,
+                        "set output \"%s_%s.png\"\n",
+                        trajectory_num.c_str(),
+                        suffix);
             } else {
                 fprintf(fp, "set term postscript eps enhanced color\n");
-                fprintf(
-                  fp, "set output \"%s_%s.eps\"\n", test_name.c_str(), suffix);
+                fprintf(fp,
+                        "set output \"%s_%s.eps\"\n",
+                        trajectory_num.c_str(),
+                        suffix);
             }
 
             // start plot at 0
@@ -481,24 +498,57 @@ void plotErrorPlots(const std::string &dir, const std::string &test_name) {
             else
                 fprintf(fp, "set ylabel \"Rotation Error [deg/m]\"\n");
 
-            // plot error curve
-            fprintf(fp, "plot \"%s_%s.txt\" using ", test_name.c_str(), suffix);
-            switch (i) {
-                case 0:
-                    fprintf(fp, "1:($2*100) title 'Translation Error'");
-                    break;
-                case 1:
-                    fprintf(fp, "1:($2*57.3) title 'Rotation Error'");
-                    break;
-                case 2:
-                    fprintf(fp, "($1*3.6):($2*100) title 'Translation Error'");
-                    break;
-                case 3:
-                    fprintf(fp, "($1*3.6):($2*57.3) title 'Rotation Error'");
-                    break;
-            }
+            // plot error curves for all plots.
+            for (size_t k = 0; k < directories.size(); ++k) {
+                std::string test_name =
+                  directories.at(k) + "_" + trajectory_num;
 
-            fprintf(fp, " lc rgb \"#0000FF\" pt 4 w linespoints\n");
+                if (k == 0) {
+                    fprintf(fp,
+                            "plot \"%s_%s.txt\" using ",
+                            test_name.c_str(),
+                            suffix);
+                } else {
+                    fprintf(fp,
+                            "\"%s_%s.txt\" using ",
+                            test_name.c_str(),
+                            suffix);
+                }
+
+
+                switch (i) {
+                    case 0:
+                        fprintf(fp,
+                                "1:($2*100) title '%s'",
+                                directories.at(k).c_str());
+                        break;
+                    case 1:
+                        fprintf(fp,
+                                "1:($2*57.3) title '%s'",
+                                directories.at(k).c_str());
+                        break;
+                    case 2:
+                        fprintf(fp,
+                                "($1*3.6):($2*100) title '%s'",
+                                directories.at(k).c_str());
+                        break;
+                    case 3:
+                        fprintf(fp,
+                                "($1*3.6):($2*57.3) title '%s'",
+                                directories.at(k).c_str());
+                        break;
+                }
+
+                if (k != directories.size() - 1) {
+                    fprintf(fp,
+                            " lc rgb \"%s\" pt 4 w linespoints, ",
+                            colours.at(k).c_str());
+                } else {
+                    fprintf(fp,
+                            " lc rgb \"%s\" pt 4 w linespoints",
+                            colours.at(k).c_str());
+                }
+            }
 
             // close file
             fclose(fp);
@@ -512,25 +562,25 @@ void plotErrorPlots(const std::string &dir, const std::string &test_name) {
         sprintf(command,
                 "cd %s; ps2pdf %s_%s.eps %s_%s_large.pdf",
                 dir.c_str(),
-                test_name.c_str(),
+                trajectory_num.c_str(),
                 suffix,
-                test_name.c_str(),
+                trajectory_num.c_str(),
                 suffix);
         system(command);
 
         sprintf(command,
                 "cd %s; pdfcrop %s_%s_large.pdf %s_%s.pdf",
                 dir.c_str(),
-                test_name.c_str(),
+                trajectory_num.c_str(),
                 suffix,
-                test_name.c_str(),
+                trajectory_num.c_str(),
                 suffix);
         system(command);
 
         sprintf(command,
                 "cd %s; rm %s_%s_large.pdf",
                 dir.c_str(),
-                test_name.c_str(),
+                trajectory_num.c_str(),
                 suffix);
         system(command);
     }
@@ -652,7 +702,7 @@ bool eval(std::string trajectory_num,
     plotPathPlot(plot_path_dir, max_roi, directories, trajectory_num);
 
     // // save + plot individual errors
-    // plotErrorPlots(plot_error_dir, trajectory_num);
+    plotErrorPlots(plot_error_dir, directories, trajectory_num);
 
     // success
     return true;
